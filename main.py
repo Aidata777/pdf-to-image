@@ -1,38 +1,39 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, send_file, jsonify
 from pdf2image import convert_from_path
 import gdown
-import io
 import os
 
 app = Flask(__name__)
 
 @app.route("/", methods=["POST"])
-def convertir_pdf():
-    data = request.json
+def convertir_pdf_a_imagen():
+    data = request.get_json()
     file_id = data.get("fileId")
     file_name = data.get("fileName", "archivo.pdf")
 
     if not file_id:
-        return jsonify({"error": "Falta el ID del archivo"}), 400
+        return jsonify({"error": "Se requiere 'fileId'"}), 400
 
-    # Descargar el archivo PDF desde Google Drive
+    # Descargar PDF desde Google Drive
     pdf_url = f"https://drive.google.com/uc?id={file_id}"
-    output_pdf = file_name
+    output_pdf = os.path.join("/tmp", file_name)
     gdown.download(pdf_url, output_pdf, quiet=False)
 
-    # Convertir la primera página a imagen
+    # Convertir PDF a imagen
     images = convert_from_path(output_pdf, dpi=200)
-    images[0].save("output.jpg", format='JPEG')
+    output_image_path = os.path.join("/tmp", "output.jpg")
+    images[0].save(output_image_path, "JPEG")
 
-    return jsonify({"status": "ok", "message": "Imagen generada con éxito"})
+    return jsonify({"message": "Imagen generada con éxito", "image_path": "/output.jpg"}), 200
 
 @app.route("/output.jpg", methods=["GET"])
-def servir_imagen():
-    if os.path.exists("output.jpg"):
-        return send_file("output.jpg", mimetype="image/jpeg")
-    else:
-        return jsonify({"error": "Imagen no encontrada"}), 404
+def obtener_imagen():
+    output_image_path = os.path.join("/tmp", "output.jpg")
+    if not os.path.exists(output_image_path):
+        return jsonify({"error": "La imagen aún no se ha generado"}), 404
+    return send_file(output_image_path, mimetype="image/jpeg")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
+
 
